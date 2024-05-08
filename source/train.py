@@ -134,8 +134,8 @@ def test(model, dataloader, cur_step, writer=None):
     
     if writer is not None:
         writer.add_scalar('Loss/Test', test_loss, global_step=cur_step)
-        writer.add_scalar('Loss/Test/BCE', output.loss_recon.item(), global_step=cur_step)
-        writer.add_scalar('Loss/Test/KLD', output.loss_kl.item(), global_step=cur_step)
+        writer.add_scalar('Loss/Test/BCE', test_recon_loss, global_step=cur_step)
+        writer.add_scalar('Loss/Test/KLD', test_kl_loss, global_step=cur_step)
         
         # Log reconstructions
         writer.add_images('Test/Reconstructions', output.x_recon.view(-1, 1, 28, 28), global_step=cur_step)
@@ -146,7 +146,7 @@ def test(model, dataloader, cur_step, writer=None):
         samples = model.decode(z)
         writer.add_images('Test/Samples', samples.view(-1, 1, 28, 28), global_step=cur_step)
 
-
+    return test_loss
 
 def main():
     print("Setting things up...")
@@ -163,7 +163,14 @@ def main():
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}')
         prev_updates = train(model, train_loader, optimizer, prev_updates, writer=writer)
-        test(model, test_loader, prev_updates, writer=writer)
+        test_loss = test(model, test_loader, prev_updates, writer=writer)
+
+    writer.add_hparams(
+        {'lr':learning_rate, 'weight_decay':weight_decay, 'input_dim':config.input_dim,
+            'hidden_dim':config.hidden_dim, 'latent_dim':config.latent_dim,
+            'act_fn':str(config.act_fn)},
+        {'hparam/loss':test_loss, 'hparam/loss-per-px':test_loss/config.input_dim},
+    )
 
 if __name__=="__main__":
     main()
