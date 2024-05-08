@@ -110,6 +110,11 @@ class BVAE(nn.Module):
         self.encoder = GaussianEncoder(config)
         self.decoder = BernoulliDecoder(config)
 
+    def encode(self, x) -> torch.distributions.Distribution:
+        return self.encoder(x)
+
+    def decode(self, z) -> torch.Tensor:
+        return self.decoder(z)
     
     def forward(self, x, bias_correction = None, compute_loss: bool = True) -> VAEOutput:
         """
@@ -119,7 +124,7 @@ class BVAE(nn.Module):
         bias_correction (torch.Tensor): Bias correction term; required to be set if compute_loss==True.
         compute_loss (bool): Flag indicating whether to compute loss (for training) or not (for inference).
         """
-        z_dist = self.encoder(x)
+        z_dist = self.encode(x)
         z_sample = z_dist.rsample()
         x_recon = self.decoder(z_sample)
 
@@ -162,6 +167,12 @@ class SGVAE(nn.Module):
         super(SGVAE, self).__init__()
         self.encoder = GaussianEncoder(config)
         self.decoder = GaussianDecoder(config)
+
+    def encode(self, x) -> torch.distributions.Distribution:
+        return self.encoder(x)
+
+    def decode(self, z) -> torch.Tensor:
+        return self.decoder(z)
 
     def forward(self, x, compute_loss: bool = True) -> VAEOutput:
         """
