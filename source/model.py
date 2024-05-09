@@ -38,47 +38,115 @@ class VAEConfig:
         input_dim (int): Dimensionality of input.
         hidden_dim (int): Dimensionality of hidden layers.
         latent_dim (int): Dimensionality of latent space.
+        depth (int): Number of hidden layers, each with half the nodes of the preceding layer.
         act_fn (FunctionType): Activation function for hidden layers.
     """
     input_dim: int
     hidden_dim: int
     latent_dim: int
+    depth: int
     act_fn: nn.Module
+
+
+class EncoderMLP(nn.Module):
+    """
+    VAE Encoder MLP, ``depth`` layers each shrinking by a factor of 2.
+
+    Attributes:
+        hidden_dim (int): Dimensionality of the first hidden layer.
+    """
+    def __init__(self, config: VAEConfig) -> None:
+        super(EncoderMLP, self).__init__()
+        assert(config.hidden_dim//2**(config.depth-1) >= 1)
+        if config.depth == 1:
+            self.mlp = nn.Sequential(
+                nn.Linear(config.input_dim, config.hidden_dim),
+                config.act_fn,
+                nn.Linear(config.hidden_dim, 2*config.latent_dim)
+            )
+        else:
+            self.mlp = nn.Sequential(
+                nn.Linear(config.input_dim, config.hidden_dim),
+                config.act_fn,
+                nn.Sequential(*[
+                    nn.Sequential(
+                        nn.Linear(config.hidden_dim//2**(i-1), config.hidden_dim//2**i),
+                        config.act_fn,
+                    )
+                    for i in range(1, config.depth)
+                ]),
+                nn.Linear(config.hidden_dim//2**(config.depth-1), 2*config.latent_dim)
+            )
+
+    def forward(self, x) -> torch.Tensor:
+        """ Compute bias and log-variance for distribution of latents. """
+        return self.mlp(x)
+
 
 class GaussianEncoder(nn.Module):
     """ VAE Gaussian Encoder (Appendix C.2). """
     def __init__(self, config: VAEConfig) -> None:
         super(GaussianEncoder, self).__init__()
-        self.layer1 = nn.Linear(config.input_dim, config.hidden_dim)
-        self.layer2 = nn.Linear(config.hidden_dim, 2*config.latent_dim) # [bias, logvar]
-        self.act_fn = config.act_fn
+        self.mlp = EncoderMLP(config)
+        self.softplus = nn.Softplus()
+        
 
-    def forward(self, x) -> torch.distributions.Distribution:
+    def forward(self, x, eps: float = 1e-8) -> torch.distributions.Distribution:
         """ Compute distribution of latents for given input x. """
-        x = self.layer1(x)
-        x = self.act_fn(x)
-        x = self.layer2(x)
+        x = self.mlp(x)
         bias, logvar = torch.chunk(x, 2, dim=-1)
-        var = torch.exp(logvar)
-        scale_tril = torch.diag_embed(var)
+        scale = self.softplus(logvar) + eps # softplus instead of exp for stability
+        scale_tril = torch.diag_embed(scale)
         z_dist = torch.distributions.MultivariateNormal(loc=bias, scale_tril=scale_tril)
         return z_dist
+
+
+class DecoderMLP(nn.Module):
+    """ 
+    Generic class for VAE Decoder MLP with ``depth`` layers each growing by a factor of 2.
+
+    Attributes:
+        hidden_dim (int): Dimensionality of the last hidden layer.
+    """
+    def __init__(self, input_dim, hidden_dim, output_dim, depth, act_fn):
+        super(DecoderMLP, self).__init__()
+        assert(hidden_dim//2**(depth-1) >= 1)
+        if depth == 1:
+            self.mlp = nn.Sequential(
+                nn.Linear(input_dim, hidden_dim),
+                act_fn,
+                nn.Linear(hidden_dim, output_dim)
+            )
+        else:
+            self.mlp = nn.Sequential(
+                nn.Linear(input_dim, hidden_dim//2**(depth-1)),
+                act_fn,
+                nn.Sequential(*[
+                    nn.Sequential(
+                        nn.Linear(hidden_dim//2**(i+1), hidden_dim//2**i),
+                        act_fn,
+                    )
+                    for i in range(depth-2, -1, -1)
+                ]),
+                nn.Linear(hidden_dim, output_dim)
+            )
+
+    def forward(self, x) -> torch.Tensor:
+        """ Compute bias and log-variance for distribution of latents. """
+        return self.mlp(x)
 
 
 class BernoulliDecoder(nn.Module):
     """ VAE Bernoulli Decoder (Appendix C.1). """
     def __init__(self, config: VAEConfig) -> None:
         super(BernoulliDecoder, self).__init__()
-        self.layer1 = nn.Linear(config.latent_dim, config.hidden_dim)
-        self.layer2 = nn.Linear(config.hidden_dim, config.input_dim)
-        self.act_fn = config.act_fn
+        self.mlp = DecoderMLP(config.latent_dim, config.hidden_dim, config.input_dim,
+                              config.depth, config.act_fn)
 
 
     def forward(self, z) -> torch.Tensor:
         """ Compute reconstructed input from latent z. """
-        z = self.layer1(z)
-        z = self.act_fn(z)
-        z = self.layer2(z)
+        z = self.mlp(z)
         z = F.sigmoid(z)
         return z
 
@@ -87,17 +155,14 @@ class GaussianDecoder(nn.Module):
     """ VAE Gaussian Encoder (Appendix C.2). """
     def __init__(self, config: VAEConfig) -> None:
         super(GaussianDecoder, self).__init__()
-        self.layer1 = nn.Linear(config.latent_dim, config.hidden_dim)
-        self.layer2 = nn.Linear(config.hidden_dim, 2*config.input_dim) # [bias, logvar]
-        self.act_fn = config.act_fn
+        self.mlp = DecoderMLP(config.latent_dim, config.hidden_dim, 2*config.input_dim,
+                              config.depth, config.act_fn)
 
-    def forward(self, x) -> torch.distributions.Distribution:
+    def forward(self, z) -> torch.distributions.Distribution:
         """ Compute distribution of latents for given input x. """
-        x = self.layer1(x)
-        x = self.act_fn(x)
-        x = self.layer2(x)
-        bias, logvar = torch.chunk(x, 2, dim=-1)
-        var = torch.exp(logvar)
+        z = self.mlp(z)
+        bias, logvar = torch.chunk(z, 2, dim=-1)
+        var = torch.exp(logvar) # todo: change to softplus
         scale_tril = torch.diag_embed(var)
         z_dist = torch.distributions.MultivariateNormal(loc=bias, scale_tril=scale_tril)
         return z_dist

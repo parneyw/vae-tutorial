@@ -18,7 +18,7 @@ class TrainConfig:
     batch_size: int
 
 TMP_CHKPT_PATH = '.tmp/'
-DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=2, act_fn=nn.Tanh())
+DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=4, depth=3, act_fn=nn.SiLU())
 DEFAULT_TRAIN_CONFIG = TrainConfig(1e-3, 1e-2, 10, 128)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -162,6 +162,7 @@ def main(args) -> None:
         input_dim=784,
         hidden_dim=args.hidden_dim,
         latent_dim=args.latent_dim,
+        depth=args.depth,
         act_fn=act_fn_lookup(args.act_fn),
     )
 
@@ -215,7 +216,7 @@ def main(args) -> None:
     writer.add_hparams(
         {'lr':tcg.lr, 'weight_decay':tcg.weight_decay,
             'hidden_dim':mcg.hidden_dim, 'latent_dim':mcg.latent_dim,
-            'act_fn':str(mcg.act_fn)},
+            'depth':mcg.depth, 'act_fn':str(mcg.act_fn)},
         {'hparam/epochs':tcg.num_epochs,'hparam/loss':test_loss, 'hparam/loss-per-px':test_loss/mcg.input_dim},
     )
 
@@ -224,7 +225,8 @@ def main(args) -> None:
     except FileExistsError as fe:
         print(fe)
         print(f"Saving to {TMP_CHKPT_PATH+run_name+'/chkpt.pt'}")
-        save_chkpt(model, mcg, tcg, optimizer, tcg.num_epochs, prev_updates, test_loss, Path(TMP_CHKPT_PATH+run_name+'/chkpt.pth'), exist_ok=False)        
+        save_chkpt(model, mcg, tcg, optimizer, tcg.num_epochs, prev_updates, test_loss,
+                   Path(TMP_CHKPT_PATH+run_name+'/chkpt.pth'), exist_ok=False)        
 
 if __name__=="__main__":
     dft = DEFAULT_TRAIN_CONFIG
@@ -236,6 +238,8 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', help='Batch size, number of images to load per training step.', type=int, default=dft.batch_size)
     parser.add_argument('--hidden_dim', help='Dimensionality of hidden vectors.', type=int, default=dcg.hidden_dim)
     parser.add_argument('--latent_dim', help='Dimensionality of latent vectors.', type=int, default=dcg.latent_dim)
-    parser.add_argument('--act_fn', help='Activation function to use on hidden layers of VAE.', type=str, default=str(dcg.act_fn))
+    parser.add_argument('--depth', help='Number of hidden layers in encoder and decoder each.', type=int, default=dcg.depth)
+    parser.add_argument('--act_fn', help='Activation function to use on hidden layers of VAE. [Tanh()|ReLU()|SiLU()|GeLU()]',
+                        type=str, default=str(dcg.act_fn))
     args = parser.parse_args()
     main(args)
