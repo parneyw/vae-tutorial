@@ -1,5 +1,6 @@
 debug.ipynb
 runs/
+.tmp/
 
 
 # Byte-compiled / optimized / DLL files
