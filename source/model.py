@@ -3,7 +3,6 @@ Implementation of a Variational Autoencoder.
 [Auto-Encoding Variational Bayes](https://arxiv.org/pdf/1312.6114), Kingma & Welling.
 """
 from dataclasses import dataclass
-import math
 from typing import Union
 import torch
 from torch import nn
@@ -89,14 +88,15 @@ class GaussianEncoder(nn.Module):
     def __init__(self, config: VAEConfig) -> None:
         super(GaussianEncoder, self).__init__()
         self.mlp = EncoderMLP(config)
+        self.softplus = nn.Softplus()
         
 
-    def forward(self, x) -> torch.distributions.Distribution:
+    def forward(self, x, eps: float = 1e-8) -> torch.distributions.Distribution:
         """ Compute distribution of latents for given input x. """
         x = self.mlp(x)
         bias, logvar = torch.chunk(x, 2, dim=-1)
-        var = torch.exp(logvar)
-        scale_tril = torch.diag_embed(var)
+        scale = self.softplus(logvar) + eps # softplus instead of exp for stability
+        scale_tril = torch.diag_embed(scale)
         z_dist = torch.distributions.MultivariateNormal(loc=bias, scale_tril=scale_tril)
         return z_dist
 
