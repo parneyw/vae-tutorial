@@ -18,7 +18,7 @@ class TrainConfig:
     batch_size: int
 
 TMP_CHKPT_PATH = '.tmp/'
-DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=2, depth=3, act_fn=nn.Tanh())
+DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=4, depth=3, act_fn=nn.SiLU())
 DEFAULT_TRAIN_CONFIG = TrainConfig(1e-3, 1e-2, 10, 128)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
