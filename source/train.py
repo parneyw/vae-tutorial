@@ -18,7 +18,7 @@ class TrainConfig:
     batch_size: int
 
 TMP_CHKPT_PATH = '.tmp/'
-DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=2, act_fn=nn.Tanh())
+DEFAULT_VAE_CONFIG = VAEConfig(input_dim=784, hidden_dim=512, latent_dim=2, depth=3, act_fn=nn.Tanh())
 DEFAULT_TRAIN_CONFIG = TrainConfig(1e-3, 1e-2, 10, 128)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -162,6 +162,7 @@ def main(args) -> None:
         input_dim=784,
         hidden_dim=args.hidden_dim,
         latent_dim=args.latent_dim,
+        depth=args.depth,
         act_fn=act_fn_lookup(args.act_fn),
     )
 
@@ -236,6 +237,7 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', help='Batch size, number of images to load per training step.', type=int, default=dft.batch_size)
     parser.add_argument('--hidden_dim', help='Dimensionality of hidden vectors.', type=int, default=dcg.hidden_dim)
     parser.add_argument('--latent_dim', help='Dimensionality of latent vectors.', type=int, default=dcg.latent_dim)
+    parser.add_argument('--depth', help='Number of hidden layers in encoder and decoder each.', type=int, default=dcg.depth)
     parser.add_argument('--act_fn', help='Activation function to use on hidden layers of VAE.', type=str, default=str(dcg.act_fn))
     args = parser.parse_args()
     main(args)
