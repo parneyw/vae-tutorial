@@ -1,23 +1,22 @@
 from datetime import datetime
+from pathlib import Path
 from tqdm import tqdm
-
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-
 from torchvision import datasets
 from torchvision.transforms import v2
-
 from model import BVAE, VAEConfig
+
+TMP_CHKPT_PATH = '.tmp/'
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 learning_rate = 1e-3
 weight_decay = 1e-2
-num_epochs = 50
+num_epochs = 3
 latent_dim = 2
 hidden_dim = 512
-
 batch_size = 128
 transform = v2.Compose([
     v2.ToImage(), 
@@ -148,6 +147,31 @@ def test(model, dataloader, cur_step, writer=None):
 
     return test_loss
 
+def save_chkpt(
+        model: nn.Module, config: VAEConfig, optimizer: torch.optim.Optimizer,
+        epoch:int, step:int, loss:float,
+        path: Path, exist_ok: bool,
+        log:bool = True,
+    ):
+    """ Save a training run checkpoint. """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not exist_ok and path.exists():
+        raise(FileExistsError)
+    chkpt = {
+        'epoch':epoch,
+        'step':step,
+        'model':model.state_dict(),
+        'config':config,
+        'optimizer':optimizer.state_dict(),
+        'loss':loss,
+    }
+    torch.save(chkpt, path)
+
+    if log:
+        print(f"Checkpoint saved to {path}.")
+
+
 def main():
     print("Setting things up...")
     config = VAEConfig(
@@ -158,7 +182,10 @@ def main():
     )
     model = BVAE(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    writer = SummaryWriter(f'../runs/mnist/vae_{datetime.now().strftime("%Y%m%d-%H%M%S")}')
+    run_name = f'vae_{datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    path = f'../runs/mnist/{run_name}'
+    writer = SummaryWriter(path)
+    test_loss = 0
     prev_updates = 0
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}')
@@ -171,6 +198,13 @@ def main():
             'act_fn':str(config.act_fn)},
         {'hparam/loss':test_loss, 'hparam/loss-per-px':test_loss/config.input_dim},
     )
+
+    try:
+        save_chkpt(model, config, optimizer, num_epochs, prev_updates, test_loss, Path(path+'/chkpt.pt'), exist_ok=False)
+    except FileExistsError as fe:
+        print(fe)
+        print(f"Saving to {TMP_CHKPT_PATH+run_name+'/chkpt.pt'}")
+        save_chkpt(model, config, optimizer, num_epochs, prev_updates, test_loss, Path(TMP_CHKPT_PATH+run_name+'/chkpt.pth'), exist_ok=False)        
 
 if __name__=="__main__":
     main()
