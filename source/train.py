@@ -173,14 +173,14 @@ def main(args) -> None:
     ])
 
     # Download and load the training data
-    train_data = datasets.MNIST(
+    train_data = datasets.FashionMNIST(
         '~/.pytorch/MNIST_data/', 
         download=True, 
         train=True, 
         transform=transform,
     )
     # Download and load the test data
-    test_data = datasets.MNIST(
+    test_data = datasets.FashionMNIST(
         '~/.pytorch/MNIST_data/', 
         download=True, 
         train=False, 
