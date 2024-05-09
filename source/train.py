@@ -225,7 +225,8 @@ def main(args) -> None:
     except FileExistsError as fe:
         print(fe)
         print(f"Saving to {TMP_CHKPT_PATH+run_name+'/chkpt.pt'}")
-        save_chkpt(model, mcg, tcg, optimizer, tcg.num_epochs, prev_updates, test_loss, Path(TMP_CHKPT_PATH+run_name+'/chkpt.pth'), exist_ok=False)        
+        save_chkpt(model, mcg, tcg, optimizer, tcg.num_epochs, prev_updates, test_loss,
+                   Path(TMP_CHKPT_PATH+run_name+'/chkpt.pth'), exist_ok=False)        
 
 if __name__=="__main__":
     dft = DEFAULT_TRAIN_CONFIG
@@ -238,6 +239,7 @@ if __name__=="__main__":
     parser.add_argument('--hidden_dim', help='Dimensionality of hidden vectors.', type=int, default=dcg.hidden_dim)
     parser.add_argument('--latent_dim', help='Dimensionality of latent vectors.', type=int, default=dcg.latent_dim)
     parser.add_argument('--depth', help='Number of hidden layers in encoder and decoder each.', type=int, default=dcg.depth)
-    parser.add_argument('--act_fn', help='Activation function to use on hidden layers of VAE.', type=str, default=str(dcg.act_fn))
+    parser.add_argument('--act_fn', help='Activation function to use on hidden layers of VAE. [Tanh()|ReLU()|SiLU()|GeLU()]',
+                        type=str, default=str(dcg.act_fn))
     args = parser.parse_args()
     main(args)
